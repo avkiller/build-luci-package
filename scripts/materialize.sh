@@ -31,3 +31,5 @@ jq -c '.[]' "$spec" | while read -r e; do
   esac
 done
 sort -u -o "$work/feed-overrides.txt" "$work/feed-overrides.txt"
+jq -r '.[] | [.pkg, .kind, (.feed // "-")] | @tsv' "$spec" > "$work/pkgs.tsv"
+jq -r '[.[].langs[]] | unique | .[]' "$spec" > "$work/langs.txt"

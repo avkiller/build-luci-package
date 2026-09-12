@@ -32,3 +32,5 @@ grep -q 'include $(TOPDIR)/feeds/luci/luci.mk' "$tmp/work/feed/luci-theme-a/Make
 [ "$(cat "$tmp/work/feed-overrides.txt")" = "luci https://example.com/luci.git $sha" ] || { echo "overrides: $(cat "$tmp/work/feed-overrides.txt")"; exit 1; }
 [ ! -e "$tmp/work/feed/luci-mod-x" ] || { echo "feed kind must not materialize"; exit 1; }
 cmp -s "$tmp/spec.json" "$tmp/work/spec.json" || { echo "spec not copied"; exit 1; }
+[ "$(cat "$tmp/work/pkgs.tsv")" = "$(printf 'luci-theme-a\tlocal\t-\nluci-theme-b\trepo\t-\nluci-mod-x\tfeed\tluci\nluci-mod-y\tfeed\tluci')" ] || { echo "pkgs.tsv: $(cat "$tmp/work/pkgs.tsv")"; exit 1; }
+[ -f "$tmp/work/langs.txt" ] && [ ! -s "$tmp/work/langs.txt" ] || { echo "langs.txt should be empty"; exit 1; }
