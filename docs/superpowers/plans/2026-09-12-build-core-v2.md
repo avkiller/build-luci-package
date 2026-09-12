@@ -55,14 +55,14 @@ build-luci-package/
 - Create: `tests/run.sh`
 - Modify: `.github/workflows/test-action.yml`（先只改触发分支，内容 Task 9 重写）
 
-- [ ] **Step 1: 建分支**
+- [x] **Step 1: 建分支**
 
 ```bash
 cd /Users/eamon/Developer/github/luci-theme/build-luci-package
 git switch -c v2
 ```
 
-- [ ] **Step 2: 写 tests/run.sh**
+- [x] **Step 2: 写 tests/run.sh**
 
 ```bash
 #!/usr/bin/env bash
@@ -77,12 +77,12 @@ done
 exit "$fail"
 ```
 
-- [ ] **Step 3: 运行，确认空跑通过**
+- [x] **Step 3: 运行，确认空跑通过**
 
 Run: `bash tests/run.sh`
 Expected: 无输出，退出码 0。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/run.sh
@@ -102,7 +102,7 @@ git commit -m "test: add bash test runner" -m "Co-Authored-By: Claude Fable 5.1 
   `{pkg, kind: "local"|"repo"|"feed", path?, url?, ref?, feed?, arch: "all"|"any"|[...], langs: [...]}`。
   非法输入退出码 1，stderr 一行原因。后续 materialize.sh、collect.sh 只消费规范化形式。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```bash
 #!/usr/bin/env bash
@@ -140,12 +140,12 @@ bad '[{"pkg":"a","path":".","langs":["ZH"]}]'
 bad '{"pkg":"a"}'
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `bash tests/test-validate-spec.sh`
 Expected: 报 `scripts/validate-spec.sh: No such file` 或首个断言失败，退出码非 0。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 ```bash
 #!/usr/bin/env bash
@@ -182,12 +182,12 @@ jq '
 ' <<<"$in"
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `bash tests/test-validate-spec.sh && echo OK`
 Expected: `OK`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/validate-spec.sh tests/test-validate-spec.sh
@@ -210,7 +210,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   `<work>/feed/<pkg>/`（local/repo，含 .git，`include ../../luci.mk` 已改写）、
   `<work>/feed-overrides.txt`（每行 `<feed> <url> <sha>`，去重）、`<work>/spec.json`。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```bash
 #!/usr/bin/env bash
@@ -249,12 +249,12 @@ grep -q 'include $(TOPDIR)/feeds/luci/luci.mk' "$tmp/work/feed/luci-theme-a/Make
 cmp -s "$tmp/spec.json" "$tmp/work/spec.json" || { echo "spec not copied"; exit 1; }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `bash tests/test-materialize.sh`
 Expected: 找不到 `scripts/materialize.sh`，退出码非 0。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 ```bash
 #!/usr/bin/env bash
@@ -292,12 +292,12 @@ done
 sort -u -o "$work/feed-overrides.txt" "$work/feed-overrides.txt"
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `bash tests/test-materialize.sh && echo OK`
 Expected: `OK`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/materialize.sh tests/test-materialize.sh
@@ -318,7 +318,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Produces: `scripts/packageinfo-names.sh <packageinfo> <source-makefile-path>` 每行一个子包名；找不到段落退出码 1。
 
-- [ ] **Step 1: 写夹具与失败测试**
+- [x] **Step 1: 写夹具与失败测试**
 
 `tests/fixtures/packageinfo.txt`：
 ```
@@ -366,12 +366,12 @@ got=$(bash "$S" "$F" package/feeds/eamonxg/luci-theme-aurora/Makefile | tr '\n' 
 if bash "$S" "$F" package/feeds/luci/nope/Makefile >/dev/null 2>&1; then echo "missing section must fail"; exit 1; fi
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `bash tests/test-packageinfo-names.sh`
 Expected: 退出码非 0。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 ```bash
 #!/usr/bin/env bash
@@ -385,12 +385,12 @@ out=$(awk -v mk="$mk" '
 printf '%s\n' "$out"
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `bash tests/test-packageinfo-names.sh && echo OK`
 Expected: `OK`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/packageinfo-names.sh tests/fixtures/packageinfo.txt tests/test-packageinfo-names.sh
@@ -410,7 +410,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Interfaces:**
 - Produces: `scripts/pkg-meta.sh <file.apk|file.ipk>` 输出一行 `name<TAB>version<TAB>arch`。apk 用 `$APK`（默认 `apk`）的 `adbdump`；ipk 解 control。
 
-- [ ] **Step 1: 写失败测试（ipk 真实构造；apk 用假 apk 命令）**
+- [x] **Step 1: 写失败测试（ipk 真实构造；apk 用假 apk 命令）**
 
 ```bash
 #!/usr/bin/env bash
@@ -434,12 +434,12 @@ got=$(APK="$tmp/bin/apk" bash scripts/pkg-meta.sh "$tmp/luci-mod-x-26.255.1~abc.
 [ "$got" = "$(printf 'luci-mod-x\t26.255.1~abc\tnoarch')" ] || { echo "apk: $got"; exit 1; }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `bash tests/test-pkg-meta.sh`
 Expected: 退出码非 0。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 ```bash
 #!/usr/bin/env bash
@@ -462,12 +462,12 @@ case "$f" in
 esac
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `bash tests/test-pkg-meta.sh && echo OK`
 Expected: `OK`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/pkg-meta.sh tests/test-pkg-meta.sh
@@ -485,7 +485,7 @@ git commit -m "feat: read name, version and arch from a built package" -m "Co-Au
 **Interfaces:**
 - Produces: `scripts/compile.sh <pkg> <log-dir>`。用 `${MAKE:-make}`；先 `-j$(nproc)`，失败则 `-j1 V=s` 输出到 `<log-dir>/<pkg>.log` 再试一次；最终失败退出码非 0 并打印日志尾部。
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 ```bash
 #!/usr/bin/env bash
@@ -515,12 +515,12 @@ if MAKE_CALLS="$tmp/calls" FAIL_UNTIL=9 MAKE="$tmp/make" bash scripts/compile.sh
 [ "$(wc -l < "$tmp/calls" | tr -d ' ')" = 2 ] || { echo "exactly one retry"; exit 1; }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `bash tests/test-compile-retry.sh`
 Expected: 退出码非 0。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 ```bash
 #!/usr/bin/env bash
@@ -541,12 +541,12 @@ tail -n 60 "$logdir/$pkg.log" >&2
 exit 1
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `bash tests/test-compile-retry.sh && echo OK`
 Expected: `OK`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/compile.sh tests/test-compile-retry.sh
@@ -574,7 +574,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
                "version":"26.255.27927~75b7b1c","arch":"noarch","size":13040,"sha256":"..."}]}]}
   ```
 
-- [ ] **Step 1: 写失败测试（夹具 SDK 树 + 假 pkg-meta）**
+- [x] **Step 1: 写失败测试（夹具 SDK 树 + 假 pkg-meta）**
 
 ```bash
 #!/usr/bin/env bash
@@ -622,12 +622,12 @@ if PKG_META="$tmp/meta" bash scripts/collect.sh "$tmp/spec2.json" eamonxg x86_64
 grep -q 'luci-theme-aurora' "$tmp/err" || { echo "error must name the package"; exit 1; }
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 Run: `bash tests/test-collect.sh`
 Expected: 退出码非 0。
 
-- [ ] **Step 3: 实现**
+- [x] **Step 3: 实现**
 
 ```bash
 #!/usr/bin/env bash
@@ -670,12 +670,12 @@ jq -n --arg sdk "$sdk" --arg arch "$arch" --arg t "$pkg_type" --argjson p "$pkgs
   '{sdk:$sdk, arch:$arch, pkg_type:$t, packages:$p}' > "$out/build-info.json"
 ```
 
-- [ ] **Step 4: 运行确认通过**
+- [x] **Step 4: 运行确认通过**
 
 Run: `bash tests/test-collect.sh && echo OK`
 Expected: `OK`。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/collect.sh tests/test-collect.sh
@@ -699,7 +699,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
   输出 `pkg_type`、`arch`、`out`；目录 `<out>/` 含包文件、`build-info.json`、`logs/`、
   `.tools/`（`apk`、`usign`、`ipkg-make-index.sh`、`make-index-json.py`）。
 
-- [ ] **Step 1: 写 entrypoint.sh**
+- [x] **Step 1: 写 entrypoint.sh**
 
 ```bash
 #!/usr/bin/env bash
@@ -775,7 +775,7 @@ fi
 echo "pkg_type=$PKG_TYPE" > "$OUT/.pkg_type"
 ```
 
-- [ ] **Step 2: 写 action.yml（整体替换）**
+- [x] **Step 2: 写 action.yml（整体替换）**
 
 ```yaml
 name: Build LuCI packages
@@ -865,12 +865,12 @@ runs:
         echo "== ${{ inputs.out }} =="; ls -la "${{ inputs.out }}"
 ```
 
-- [ ] **Step 3: 静态检查**
+- [x] **Step 3: 静态检查**
 
 Run: `bash -n entrypoint.sh && for s in scripts/*.sh; do bash -n "$s"; done && echo SYNTAX_OK`
 Expected: `SYNTAX_OK`。
 
-- [ ] **Step 4: 本地容器冒烟（macOS 上用 docker 卷保证大小写敏感）**
+- [x] **Step 4: 本地容器冒烟（macOS 上用 docker 卷保证大小写敏感）**
 
 ```bash
 cd /Users/eamon/Developer/github/luci-theme/build-luci-package
@@ -891,7 +891,7 @@ docker run --rm --platform linux/amd64 -v blp-work:/work alpine sh -c 'ls -la /w
 Expected: `out/` 里有 `luci-theme-aurora-<ver>.apk`、`build-info.json`（`pkg_type: apk`，一个文件条目 `arch: noarch`），`.tools/` 四个文件。
 若 `ghcr.io/openwrt/sdk:x86_64-25.12.5` 拉不到，改用 `openwrt/sdk:x86_64-25.12.5` 并把 action 的 `image` 默认值改成 `openwrt/sdk`，在 commit body 里记录原因。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add entrypoint.sh action.yml
@@ -911,7 +911,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Produces: 输入 `name`、`files`（多行 glob）、`release`（"true"/"false"）、`release_tag`、`body_repo`、`body_path`。
   tag 构建或 `release=true` 时用 softprops/action-gh-release@v2 创建或更新 Release。语义与 v1 尾部一致。
 
-- [ ] **Step 1: 写 release/action.yml**
+- [x] **Step 1: 写 release/action.yml**
 
 ```yaml
 name: Publish LuCI package release
@@ -991,12 +991,12 @@ runs:
         files: ${{ inputs.files }}
 ```
 
-- [ ] **Step 2: 静态检查**
+- [x] **Step 2: 静态检查**
 
 Run: `python3 -c "import yaml,sys; yaml.safe_load(open('release/action.yml'))" && echo YAML_OK`
 Expected: `YAML_OK`（若无 PyYAML，用 `ruby -ryaml -e 'YAML.load_file("release/action.yml")'`）。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add release/action.yml
@@ -1018,7 +1018,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 - Consumes: Task 7 的 action。
 - Produces: CI 证据：noarch 双 SDK、feed 覆盖版本等于 findrev、架构包双架构、声明错误必失败。
 
-- [ ] **Step 1: 写最小架构包夹具**
+- [x] **Step 1: 写最小架构包夹具**
 
 `tests/fixtures/hello-arch/Makefile`：
 ```make
@@ -1059,7 +1059,7 @@ $(eval $(call BuildPackage,hello-arch))
 int main(void) { puts("hello-arch"); return 0; }
 ```
 
-- [ ] **Step 2: 写 workflow**
+- [x] **Step 2: 写 workflow**
 
 ```yaml
 name: Test build action
@@ -1160,12 +1160,12 @@ jobs:
           [ "${{ steps.build.outcome }}" = failure ] || { echo "a noarch declaration on an arch package must fail the build"; exit 1; }
 ```
 
-- [ ] **Step 3: 本地跑单元测试全量**
+- [x] **Step 3: 本地跑单元测试全量**
 
 Run: `bash tests/run.sh`
 Expected: 全部 PASS。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/fixtures/hello-arch .github/workflows/test-action.yml
@@ -1185,7 +1185,7 @@ Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 **Files:**
 - Modify: `README.md`（整体重写）
 
-- [ ] **Step 1: 写 README**
+- [x] **Step 1: 写 README**
 
 ```markdown
 # build-luci-package
@@ -1237,7 +1237,7 @@ The feed pipeline that consumes this action, and the reasons behind its shape, a
 openwrt-cloud's feed infra v2 design document.
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add README.md
@@ -1245,6 +1245,16 @@ git commit -m "docs: describe the v2 build and release actions" -m "Co-Authored-
 ```
 
 ---
+
+## 执行记录（2026-09-12）
+
+- Task 0–10 全部完成并提交于分支 `v2`（13 个 commit）。
+- 与计划的偏差：SDK 镜像无 jq，`collect.sh` 改为 `collect.py`（python3 为 buildroot 必备），
+  `materialize.sh` 额外产出 `pkgs.tsv`、`langs.txt` 供 entrypoint 读取；action 的 `docker run` 未变。
+- 本地冒烟（ghcr.io/openwrt/sdk:x86_64-25.12.5，aurora@c8e8be3）：`ENTRYPOINT_DONE rc=0`，
+  产出 `luci-theme-aurora-1.3.1-r20260904.apk`，build-info.json 版本/架构/sha256 正确，
+  工具包 4 个文件齐全；首轮 `-j10` 失败由 `-j1` 重试兜住。
+- 待办：Task 9 Step 5（push `v2` 跑 CI）等用户确认。
 
 ## 自检记录
 
