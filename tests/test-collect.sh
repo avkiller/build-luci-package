@@ -24,7 +24,7 @@ cat > "$tmp/spec.json" <<EOS
 [{"pkg":"luci-theme-aurora","kind":"local","path":".","arch":"all","langs":[]},
  {"pkg":"luci-mod-dashboard","kind":"feed","url":"u","ref":"$sha","feed":"luci","arch":"all","langs":["zh-cn"]}]
 EOS
-PKG_META="$tmp/meta" bash scripts/collect.sh "$tmp/spec.json" eamonxg x86_64 apk 25.12.5 "$sdk" "$tmp/out"
+PKG_META="$tmp/meta" scripts/collect.py "$tmp/spec.json" eamonxg x86_64 apk 25.12.5 "$sdk" "$tmp/out"
 
 [ "$(ls "$tmp/out"/*.apk | wc -l | tr -d ' ')" = 4 ] || { echo "expected 4 files, got: $(ls "$tmp/out")"; exit 1; }
 [ ! -e "$tmp/out/luci-mod-dashboard-extra-1.apk" ] || { echo "prefix collision"; exit 1; }
@@ -39,5 +39,5 @@ bi="$tmp/out/build-info.json"
 cat > "$tmp/spec2.json" <<EOS
 [{"pkg":"luci-theme-aurora","kind":"local","path":".","arch":["x86_64"],"langs":[]}]
 EOS
-if PKG_META="$tmp/meta" bash scripts/collect.sh "$tmp/spec2.json" eamonxg x86_64 apk 25.12.5 "$sdk" "$tmp/out2" 2>"$tmp/err"; then echo "arch mismatch must fail"; exit 1; fi
+if PKG_META="$tmp/meta" scripts/collect.py "$tmp/spec2.json" eamonxg x86_64 apk 25.12.5 "$sdk" "$tmp/out2" 2>"$tmp/err"; then echo "arch mismatch must fail"; exit 1; fi
 grep -q 'luci-theme-aurora' "$tmp/err" || { echo "error must name the package"; exit 1; }
