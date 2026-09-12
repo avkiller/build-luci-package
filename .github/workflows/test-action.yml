@@ -3,7 +3,7 @@ name: Test build action
 on:
   workflow_dispatch:
   push:
-    branches: [v2, master]
+    branches: [master]
     paths: [action.yml, entrypoint.sh, scripts/**, release/**, tests/**, .github/workflows/test-action.yml]
 
 permissions:
