@@ -1,320 +1,85 @@
-name: Build LuCI Package
-description: Build and release OpenWrt LuCI packages via SDK
+name: Build LuCI packages
+description: Build a set of packages in an official OpenWrt SDK image and emit a directory with metadata
 inputs:
-  package:
-    description: LuCI package name (e.g. luci-theme-aurora)
+  sdk:
+    description: OpenWrt SDK version, e.g. 25.12.5, 24.10.4 or main
     required: true
+  arch:
+    description: Package architecture, e.g. x86_64 or aarch64_cortex-a53
+    required: false
+    default: x86_64
+  packages:
+    description: JSON array of package specs (pkg + path|repo[+ref][+feed], arch, langs)
+    required: true
+  feed_name:
+    description: Name of the src-link feed the local/repo packages are built from
+    required: false
+    default: eamonxg
+  out:
+    description: Directory (relative to the workspace) to place the built packages in
+    required: false
+    default: out
+  image:
+    description: SDK image repository
+    required: false
+    default: ghcr.io/openwrt/sdk
+  index_tools:
+    description: Also export apk/usign and the index scripts under <out>/.tools
+    required: false
+    default: "true"
+outputs:
   pkg_type:
-    description: Package type (ipk or apk)
-    required: true
-  source_dir:
-    description: Path to package source within workspace
-    required: false
-    default: "."
-  skip_checkout:
-    description: Set to "true" to skip actions/checkout (repo already present)
-    required: false
-    default: "false"
-  rsync_excludes:
-    description: Newline-separated rsync exclude patterns
-    required: false
-    default: |
-      .github
-      .vscode
-      .dev
-  prep_script:
-    description: Extra build steps to prepare feeds before defconfig
-    required: false
-    default: ""
-  artifact_paths:
-    description: Newline-separated artifact paths (relative to SDK dir, supports $ARCH/$SDK_DIR/$PACKAGE)
-    required: true
-  release_body_repo:
-    description: GitHub repo containing the release body file (e.g. eamonxg/assets). Leave empty to use a local file.
-    required: false
-    default: ""
-  release_body_path:
-    description: Release body markdown path — relative to repo root when release_body_repo is set, otherwise relative to the local workspace.
-    required: false
-    default: ""
-  release:
-    description: Set to "true" to create or update a GitHub Release when the build is not running on a tag.
-    required: false
-    default: "false"
-  release_tag:
-    description: GitHub Release tag to create or update for non-tag release builds.
-    required: false
-    default: ""
+    description: apk or ipk, as decided by the SDK
+    value: ${{ steps.done.outputs.pkg_type }}
+  arch:
+    description: The architecture that was built
+    value: ${{ inputs.arch }}
+  out:
+    description: The output directory
+    value: ${{ inputs.out }}
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v6
-      if: ${{ inputs.skip_checkout != 'true' }}
-      with:
-        fetch-depth: 0
-
-    - name: Install build deps
-      shell: bash
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends build-essential curl ca-certificates xz-utils zstd git python3 rsync
-
-    - name: Prepare SDK
-      id: sdk
-      shell: bash
-      run: |
-        set -euo pipefail
-        ARCH="x86_64"
-        SDK_CPU="x86-64"
-        CPU_DIR="x86"
-        SUB_DIR="64"
-        case "${{ inputs.pkg_type }}" in
-          ipk)
-            SDK_URL="https://downloads.openwrt.org/releases/24.10.4"
-            SDK_DIR="ipk_SDK"
-            ;;
-          apk)
-            SDK_URL="https://downloads.openwrt.org/snapshots"
-            SDK_DIR="apk_SDK"
-            ;;
-          *)
-            echo "Unsupported pkg_type: ${{ inputs.pkg_type }}" >&2
-            exit 1
-            ;;
-        esac
-
-        INDEX_URL="${SDK_URL}/targets/${CPU_DIR}/${SUB_DIR}/"
-        SDK_TAR=$(curl -s "$INDEX_URL" | grep -oE "openwrt-sdk[^\"]*${SDK_CPU}[^\"]*\.tar\.(zst|xz)" | head -n 1)
-
-        echo "SDK: $SDK_TAR"
-        curl -sI "$INDEX_URL/$SDK_TAR" | grep -iE '^(etag|last-modified|content-length):' > .sdk-meta
-        cat .sdk-meta
-
-        {
-          echo "arch=$ARCH"
-          echo "sdk_dir=$SDK_DIR"
-          echo "index_url=$INDEX_URL"
-          echo "tar=$SDK_TAR"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Cache SDK
-      id: cache
-      if: ${{ github.ref_type != 'tag' }}
-      uses: actions/cache@v5
-      with:
-        path: tmp/${{ steps.sdk.outputs.sdk_dir }}
-        key: ${{ steps.sdk.outputs.tar }}-${{ inputs.pkg_type }}-${{ hashFiles('.sdk-meta') }}
-
-    - name: Download SDK
-      if: ${{ steps.cache.outputs.cache-hit != 'true' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        echo "Cache MISS - Downloading SDK"
-        mkdir -p tmp
-        curl -SLk --connect-timeout 30 --retry 2 "${{ steps.sdk.outputs.index_url }}/${{ steps.sdk.outputs.tar }}" -o "tmp/${{ steps.sdk.outputs.tar }}"
-        cd tmp
-        if echo "${{ steps.sdk.outputs.tar }}" | grep -q \.zst$; then
-          zstd -d "${{ steps.sdk.outputs.tar }}" -o SDK.tar && tar xf SDK.tar
-        else
-          tar xf "${{ steps.sdk.outputs.tar }}"
-        fi
-        mv $(ls -d openwrt-sdk-* | head -n 1) "${{ steps.sdk.outputs.sdk_dir }}"
-
-    - name: Build ${{ inputs.package }} (${{ inputs.pkg_type }})
-      shell: bash
-      run: |
-        set -euo pipefail
-        PACKAGE="${{ inputs.package }}"
-        SDK_DIR="${{ steps.sdk.outputs.sdk_dir }}"
-        SOURCE_DIR="${{ inputs.source_dir }}"
-        if [ -z "$SOURCE_DIR" ]; then
-          SOURCE_DIR="."
-        fi
-        SOURCE_DIR="${SOURCE_DIR%/}"
-        if [ ! -d "$SOURCE_DIR" ]; then
-          echo "source_dir not found: $SOURCE_DIR" >&2
-          exit 1
-        fi
-
-        RSYNC_EXCLUDES=$(cat <<'EOF'
-        ${{ inputs.rsync_excludes }}
-        EOF
-        )
-
-        mkdir -p "tmp/${SDK_DIR}/package/${PACKAGE}"
-        exclude_args=()
-        while IFS= read -r pattern; do
-          pattern="$(echo "$pattern" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-          [ -z "$pattern" ] && continue
-          exclude_args+=(--exclude "$pattern")
-        done <<< "$RSYNC_EXCLUDES"
-
-        rsync -a --delete "${SOURCE_DIR}/" "tmp/${SDK_DIR}/package/${PACKAGE}/" \
-          --exclude tmp "${exclude_args[@]}"
-
-        cd "tmp/${SDK_DIR}"
-        cp feeds.conf.default feeds.conf
-        echo "=== feeds.conf ==="
-        cat feeds.conf
-        echo "---------- testing feed git URLs ----------"
-        grep -E '^[[:space:]]*src-git' feeds.conf | while read -r line; do
-          name=$(echo "$line" | awk '{print $(NF-1)}')
-          url_with_rev=$(echo "$line" | awk '{print $NF}')
-          url_base=${url_with_rev%%^*}
-          url=${url_base%%;*}
-          if git ls-remote "$url" HEAD >/dev/null 2>&1; then
-            echo "OK: $name $url_with_rev (remote: $url)"
-          else
-            echo "FAILED: $name $url_with_rev (remote: $url)"
-          fi
-        done
-
-        if [ -n "${{ inputs.prep_script }}" ]; then
-          ${{ inputs.prep_script }}
-        else
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-        fi
-        make defconfig
-        make package/${PACKAGE}/compile -j"$(nproc)" V=s
-
-    - name: Compute ref slug
-      id: slug
-      shell: bash
-      run: |
-        set -euo pipefail
-        # upload-artifact forbids / \ : * ? " < > | in names,
-        # so replace / with - for branch refs like feat/foo
-        ref="${GITHUB_REF_NAME//\//-}"
-        echo "ref=$ref" >> "$GITHUB_OUTPUT"
-
-    - name: Resolve artifact paths
-      id: artifacts
-      shell: bash
-      run: |
-        set -euo pipefail
-        PACKAGE="${{ inputs.package }}"
-        SDK_DIR="${{ steps.sdk.outputs.sdk_dir }}"
-        ARCH="${{ steps.sdk.outputs.arch }}"
-
-        resolve_paths() {
-          local result=""
-
-          while IFS= read -r line; do
-            line="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-            [ -z "$line" ] && continue
-            local expanded="$line"
-
-            expanded="${expanded//\$SDK_DIR/$SDK_DIR}"
-            expanded="${expanded//\$\{SDK_DIR\}/$SDK_DIR}"
-            expanded="${expanded//\$ARCH/$ARCH}"
-            expanded="${expanded//\$\{ARCH\}/$ARCH}"
-            expanded="${expanded//\$PACKAGE/$PACKAGE}"
-            expanded="${expanded//\$\{PACKAGE\}/$PACKAGE}"
-
-            if [[ "$expanded" != /* && "$expanded" != tmp/* ]]; then
-              expanded="tmp/${SDK_DIR}/${expanded}"
-            fi
-
-            result+="${expanded}"
-            result+=$'\n'
-
-          done << 'EOF'
-        ${{ inputs.artifact_paths }}
-        EOF
-
-          printf '%s' "$result"
-        }
-
-        paths="$(resolve_paths)"
-
-        {
-          echo "paths<<EOF"
-          printf '%s\n' "$paths"
-          echo "EOF"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Upload artifact (${{ inputs.pkg_type }})
-      uses: actions/upload-artifact@v6
-      with:
-        name: ${{ inputs.package }}-${{ steps.slug.outputs.ref }}-${{ inputs.pkg_type }}
-        path: |
-          ${{ steps.artifacts.outputs.paths }}
-
-    - name: Resolve release body path
-      id: release_body
-      if: ${{ github.ref_type == 'tag' || inputs.release == 'true' }}
+    - name: Validate and materialise sources
       shell: bash
       env:
-        GH_TOKEN: ${{ github.token }}
+        PACKAGES: ${{ inputs.packages }}
       run: |
         set -euo pipefail
-        path="${{ inputs.release_body_path }}"
-        repo="${{ inputs.release_body_repo }}"
-        empty="$GITHUB_WORKSPACE/.release-body-empty"
+        A="${{ github.action_path }}"
+        WORK="$RUNNER_TEMP/blp-work"; rm -rf "$WORK"; mkdir -p "$WORK"
+        printf '%s' "$PACKAGES" | bash "$A/scripts/validate-spec.sh" > "$WORK/spec.norm.json"
+        bash "$A/scripts/materialize.sh" "$WORK/spec.norm.json" "$WORK"
+        echo "WORK=$WORK" >> "$GITHUB_ENV"
 
-        if [ -n "$repo" ] && [ -n "$path" ]; then
-          out="$GITHUB_WORKSPACE/.release-body.md"
-          if gh api "repos/${repo}/contents/${path}" --jq '.content' | base64 -d > "$out" 2>/dev/null && [ -s "$out" ]; then
-            echo "path=$out" >> "$GITHUB_OUTPUT"
-          else
-            echo "Warning: could not fetch '${path}' from '${repo}', using empty body" >&2
-            : > "$empty"
-            echo "path=$empty" >> "$GITHUB_OUTPUT"
-          fi
-        else
-          source_dir="${{ inputs.source_dir }}"
-          if [ -z "$source_dir" ]; then
-            source_dir="."
-          fi
-          if [[ "$path" != /* && "$path" != ./* && "$source_dir" != "." ]]; then
-            candidate="${source_dir%/}/${path}"
-            if [ -f "$candidate" ]; then
-              path="$candidate"
-            fi
-          fi
-          if [ -z "$path" ] || [ ! -f "$path" ]; then
-            : > "$empty"
-            path="$empty"
-          fi
-          echo "path=$path" >> "$GITHUB_OUTPUT"
-        fi
-
-    - name: Resolve release target
-      id: release_target
-      if: ${{ github.ref_type == 'tag' || inputs.release == 'true' }}
+    - name: Build in ${{ inputs.image }}:${{ inputs.arch }}-${{ inputs.sdk }}
       shell: bash
       env:
-        RELEASE: ${{ inputs.release }}
-        RELEASE_TAG: ${{ inputs.release_tag }}
+        USIGN_KEY: ${{ env.USIGN_KEY }}
+        APK_KEY: ${{ env.APK_KEY }}
       run: |
         set -euo pipefail
+        A="${{ github.action_path }}"
+        IMG="${{ inputs.image }}:${{ inputs.arch }}-${{ inputs.sdk }}"
+        docker pull -q "$IMG"
+        sudo chown -R 1000:1000 "$WORK"
+        docker run --rm \
+          -v "$WORK:/work" \
+          -v "$A/entrypoint.sh:/entrypoint.sh:ro" \
+          -v "$A/scripts:/scripts:ro" \
+          -e ARCH="${{ inputs.arch }}" -e SDK="${{ inputs.sdk }}" \
+          -e FEED_NAME="${{ inputs.feed_name }}" -e INDEX_TOOLS="${{ inputs.index_tools }}" \
+          -e USIGN_KEY -e APK_KEY \
+          "$IMG" bash /entrypoint.sh
+        sudo chown -R "$(id -u):$(id -g)" "$WORK"
 
-        if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
-          tag="$GITHUB_REF_NAME"
-        else
-          tag="$(printf '%s' "$RELEASE_TAG" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-          if [ "$RELEASE" = "true" ] && [ -z "$tag" ]; then
-            echo "release_tag is required when release is true outside tag builds" >&2
-            exit 1
-          fi
-        fi
-
-        {
-          echo "tag_name=$tag"
-          echo "target_commitish=$(git rev-parse HEAD)"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Release ${{ inputs.package }} (${{ inputs.pkg_type }})
-      if: ${{ github.ref_type == 'tag' || inputs.release == 'true' }}
-      uses: softprops/action-gh-release@v2
-      with:
-        name: ${{ inputs.package }}-${{ steps.release_target.outputs.tag_name }}
-        tag_name: ${{ steps.release_target.outputs.tag_name }}
-        target_commitish: ${{ steps.release_target.outputs.target_commitish }}
-        body_path: ${{ steps.release_body.outputs.path }}
-        draft: false
-        prerelease: false
-        files: |
-          ${{ steps.artifacts.outputs.paths }}
+    - name: Stage output
+      id: done
+      shell: bash
+      run: |
+        set -euo pipefail
+        rm -rf "${{ inputs.out }}"; mkdir -p "$(dirname "${{ inputs.out }}")"
+        cp -R "$WORK/out" "${{ inputs.out }}"
+        pkg_type=$(sed 's/^pkg_type=//' "${{ inputs.out }}/.pkg_type")
+        echo "pkg_type=$pkg_type" >> "$GITHUB_OUTPUT"
+        echo "== ${{ inputs.out }} =="; ls -la "${{ inputs.out }}"
