@@ -1,0 +1,29 @@
+Source-Makefile: package/feeds/luci/luci-base/Makefile
+
+Package: luci-base
+Version: 1
+@@
+
+Package: luci-i18n-base-zh-cn
+Version: 1
+@@
+
+Source-Makefile: package/feeds/luci/luci-mod-dashboard/Makefile
+
+Package: luci-mod-dashboard
+Version: 1
+@@
+
+Package: luci-i18n-dashboard-de
+Version: 1
+@@
+
+Package: luci-i18n-dashboard-zh-cn
+Version: 1
+@@
+
+Source-Makefile: package/feeds/eamonxg/luci-theme-aurora/Makefile
+
+Package: luci-theme-aurora
+Version: 1
+@@
