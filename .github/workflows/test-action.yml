@@ -1,45 +1,97 @@
-name: Test Build LuCI Package Action
+name: Test build action
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
-    paths:
-      - action.yml
-      - .github/workflows/test-action.yml
+    branches: [v2, master]
+    paths: [action.yml, entrypoint.sh, scripts/**, release/**, tests/**, .github/workflows/test-action.yml]
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  unit:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        pkg_type: [ipk, apk]
     steps:
-      - name: Checkout action repo
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - run: bash tests/run.sh
 
-      - name: Checkout luci-theme-aurora
-        uses: actions/checkout@v6
+  noarch:
+    runs-on: ubuntu-latest
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        sdk: ["24.10.4", "25.12.5"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           repository: eamonxg/luci-theme-aurora
-          path: package
+          path: aurora
           fetch-depth: 0
-
-      - name: Build luci-theme-aurora (${{ matrix.pkg_type }})
+      - id: build
         uses: ./
         with:
-          package: luci-theme-aurora
-          pkg_type: ${{ matrix.pkg_type }}
-          source_dir: package
-          skip_checkout: "true"
-          prep_script: |
-            ./scripts/feeds update -f base luci
-            ./scripts/feeds install -p luci-base
-          artifact_paths: |
-            bin/packages/$ARCH/base/*luci-theme-aurora*.[ai]pk
-          release_body_repo: eamonxg/assets
-          release_body_path: aurora/docs/theme/changelog/${{ github.ref_name }}.md
+          sdk: ${{ matrix.sdk }}
+          packages: '[{"pkg":"luci-theme-aurora","path":"aurora"}]'
+      - run: |
+          set -euo pipefail
+          ls out
+          test -f out/build-info.json
+          [ "$(jq -r '.packages[0].files|length' out/build-info.json)" = 1 ]
+          case "${{ matrix.sdk }}" in 24.*) want=ipk ;; *) want=apk ;; esac
+          [ "${{ steps.build.outputs.pkg_type }}" = "$want" ]
+          test -x out/.tools/usign && test -f out/.tools/make-index-json.py
+          [ "$want" = ipk ] || test -x out/.tools/apk
+
+  feed-override:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v6
+      - id: build
+        uses: ./
+        with:
+          sdk: "25.12.5"
+          packages: '[{"pkg":"luci-mod-dashboard","repo":"eamonxg/luci","ref":"75b7b1cc0186d4a1d0e0b0e29656126ebda0e898","feed":"luci","langs":["zh-cn"]}]'
+      - run: |
+          set -euo pipefail
+          git clone -q https://github.com/eamonxg/luci.git luci && git -C luci checkout -q 75b7b1cc0186d4a1d0e0b0e29656126ebda0e898
+          set -- $(git -C luci log -1 --format='%ct %h' --abbrev=7 -- modules/luci-mod-dashboard ':(exclude)po')
+          want=$(printf '%s.%05d~%s' "$(date --utc --date="@$1" +%y.%j)" "$(($1 % 86400))" "$2")
+          got=$(jq -r '.packages[0].files[] | select(.name=="luci-mod-dashboard") | .version' out/build-info.json)
+          echo "want=$want got=$got"; [ "$got" = "$want" ]
+          [ "$(jq -r '.packages[0].files|length' out/build-info.json)" -ge 2 ]
+
+  arch:
+    runs-on: ubuntu-latest
+    needs: unit
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, aarch64_cortex-a53]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./
+        with:
+          sdk: "25.12.5"
+          arch: ${{ matrix.arch }}
+          packages: '[{"pkg":"hello-arch","path":"tests/fixtures/hello-arch","arch":"any"}]'
+      - run: |
+          set -euo pipefail
+          [ "$(jq -r '.packages[0].files[0].arch' out/build-info.json)" = "${{ matrix.arch }}" ]
+
+  arch-declared-wrong:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v6
+      - id: build
+        continue-on-error: true
+        uses: ./
+        with:
+          sdk: "25.12.5"
+          packages: '[{"pkg":"hello-arch","path":"tests/fixtures/hello-arch"}]'
+      - run: |
+          [ "${{ steps.build.outcome }}" = failure ] || { echo "a noarch declaration on an arch package must fail the build"; exit 1; }
