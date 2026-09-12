@@ -1,0 +1,75 @@
+name: Publish LuCI package release
+description: Create or update a GitHub Release with the built package files
+inputs:
+  name:
+    description: Release name prefix, usually the package name
+    required: true
+  files:
+    description: Newline-separated file globs to attach
+    required: true
+  release:
+    description: Set to "true" to publish when not running on a tag
+    required: false
+    default: "false"
+  release_tag:
+    description: Tag to create or update when release is "true" outside tag builds
+    required: false
+    default: ""
+  body_repo:
+    description: Repo holding the release body markdown (e.g. eamonxg/assets); empty = local file
+    required: false
+    default: ""
+  body_path:
+    description: Path of the body markdown, relative to body_repo or to the workspace
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: Resolve release body
+      id: body
+      if: ${{ github.ref_type == 'tag' || inputs.release == 'true' }}
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        path="${{ inputs.body_path }}"; repo="${{ inputs.body_repo }}"
+        empty="$GITHUB_WORKSPACE/.release-body-empty"
+        if [ -n "$repo" ] && [ -n "$path" ]; then
+          out="$GITHUB_WORKSPACE/.release-body.md"
+          if gh api "repos/${repo}/contents/${path}" --jq '.content' | base64 -d > "$out" 2>/dev/null && [ -s "$out" ]; then
+            echo "path=$out" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "Warning: could not fetch '${path}' from '${repo}', using empty body" >&2
+        elif [ -n "$path" ] && [ -f "$path" ]; then
+          echo "path=$path" >> "$GITHUB_OUTPUT"; exit 0
+        fi
+        : > "$empty"; echo "path=$empty" >> "$GITHUB_OUTPUT"
+
+    - name: Resolve release target
+      id: target
+      if: ${{ github.ref_type == 'tag' || inputs.release == 'true' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${GITHUB_REF_TYPE:-}" = tag ]; then
+          tag="$GITHUB_REF_NAME"
+        else
+          tag="$(printf '%s' "${{ inputs.release_tag }}" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+          [ -n "$tag" ] || { echo "release_tag is required when release is true outside tag builds" >&2; exit 1; }
+        fi
+        echo "tag_name=$tag" >> "$GITHUB_OUTPUT"
+        echo "target_commitish=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+    - name: Release
+      if: ${{ github.ref_type == 'tag' || inputs.release == 'true' }}
+      uses: softprops/action-gh-release@v2
+      with:
+        name: ${{ inputs.name }}-${{ steps.target.outputs.tag_name }}
+        tag_name: ${{ steps.target.outputs.tag_name }}
+        target_commitish: ${{ steps.target.outputs.target_commitish }}
+        body_path: ${{ steps.body.outputs.path }}
+        draft: false
+        prerelease: false
+        files: ${{ inputs.files }}
