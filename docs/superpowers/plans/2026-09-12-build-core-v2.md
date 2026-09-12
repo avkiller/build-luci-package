@@ -1174,7 +1174,7 @@ git commit -m "test: integration matrix for noarch, feed override and arch build
 Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>"
 ```
 
-- [ ] **Step 5: 推送 v2 分支并观察 CI（需用户确认后再 push）**
+- [x] **Step 5: 推送 v2 分支并观察 CI（需用户确认后再 push）**
 
 等用户确认后：`git push -u origin v2`，然后 `gh run watch` 直到四个 job 全绿。任一失败按 systematic-debugging 处理，不得改测试断言来绿。
 
@@ -1254,7 +1254,8 @@ git commit -m "docs: describe the v2 build and release actions" -m "Co-Authored-
 - 本地冒烟（ghcr.io/openwrt/sdk:x86_64-25.12.5，aurora@c8e8be3）：`ENTRYPOINT_DONE rc=0`，
   产出 `luci-theme-aurora-1.3.1-r20260904.apk`，build-info.json 版本/架构/sha256 正确，
   工具包 4 个文件齐全；首轮 `-j10` 失败由 `-j1` 重试兜住。
-- 待办：Task 9 Step 5（push `v2` 跑 CI）等用户确认。
+- CI（run 34702116874）7 个 job 全绿：unit、noarch 24.10.4/25.12.5、feed-override、arch x86_64/aarch64_cortex-a53、arch-declared-wrong。
+  途中修正：opkg 时代的 SDK 没有 .apk.bin，工具包导出改为按文件存在与否。
 
 ## 自检记录
 
