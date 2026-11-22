@@ -74,7 +74,7 @@ runs:
           -e ARCH="${{ inputs.arch }}" -e SDK="${{ inputs.sdk }}" \
           -e FEED_NAME="${{ inputs.feed_name }}" -e INDEX_TOOLS="${{ inputs.index_tools }}" \
           -e USIGN_KEY -e APK_KEY \
-          -e INDEX="${{ inputs.index }}"
+          -e INDEX="${{ inputs.index }}" \
           "$IMG" bash /entrypoint.sh
         sudo chown -R "$(id -u):$(id -g)" "$WORK"
 
