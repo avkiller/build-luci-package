@@ -14,7 +14,7 @@ inputs:
   feed_name:
     description: Name of the src-link feed the local/repo packages are built from
     required: false
-    default: eamonxg
+    default: avkiller
   out:
     description: Directory (relative to the workspace) to place the built packages in
     required: false
@@ -30,7 +30,7 @@ inputs:
   index:
     description: Also index pkg
     required: false
-    default: "true"
+    default: "false"
 outputs:
   pkg_type:
     description: apk or ipk, as decided by the SDK
