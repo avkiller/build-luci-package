@@ -91,14 +91,36 @@ index_and_sign_ipk() {
   [ -x "$usign_bin" ] || usign_bin="$(command -v usign || true)"
 
   if [ -x "$idx_script" ]; then
+    local shim_dir
+    shim_dir="$(mktemp -d)"
+
+    if ! command -v sha256 >/dev/null 2>&1; then
+      if [ -x "/builder/staging_dir/host/bin/sha256" ]; then
+        ln -sf "/builder/staging_dir/host/bin/sha256" "$shim_dir/sha256"
+      elif command -v sha256sum >/dev/null 2>&1; then
+        cat <<'EOF' > "$shim_dir/sha256"
+#!/usr/bin/env sh
+exec sha256sum "$@"
+EOF
+        chmod +x "$shim_dir/sha256"
+      elif command -v openssl >/dev/null 2>&1; then
+        cat <<'EOF' > "$shim_dir/sha256"
+#!/usr/bin/env sh
+exec openssl dgst -sha256 "$@"
+EOF
+        chmod +x "$shim_dir/sha256"
+      fi
+    fi
+
     (
       cd "$dir"
-      PATH="/builder/staging_dir/host/bin:$PATH" "$idx_script" . > Packages
+      PATH="$shim_dir:/builder/staging_dir/host/bin:$PATH" "$idx_script" . > Packages
       gzip -9c Packages > Packages.gz
       if [ -f "$json_script" ]; then
-        PATH="/builder/staging_dir/host/bin:$PATH" python3 "$json_script" . > Packages.json || true
+        PATH="$shim_dir:/builder/staging_dir/host/bin:$PATH" python3 "$json_script" . > Packages.json || true
       fi
     )
+    rm -rf "$shim_dir"
     echo "✅ Generated ipk index (Packages, Packages.gz) in $dir"
   else
     echo "⚠️ ipkg-make-index.sh not found, skip ipk index in $dir" >&2
