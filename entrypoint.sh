@@ -88,52 +88,71 @@ index_and_sign_ipk() {
   local usign_bin="/builder/staging_dir/host/bin/usign"
   local priv_key="/builder/key-build"
 
+  [ -x "$idx_script" ] || { echo "⚠️ ipkg-make-index.sh not found, skip $dir" >&2; return 0; }
   [ -x "$usign_bin" ] || usign_bin="$(command -v usign || true)"
 
-  if [ -x "$idx_script" ]; then
-    local shim_dir
-    shim_dir="$(mktemp -d)"
+  local shim_dir
+  shim_dir="$(mktemp -d)"
 
-    if ! command -v sha256 >/dev/null 2>&1; then
-      if [ -x "/builder/staging_dir/host/bin/sha256" ]; then
-        ln -sf "/builder/staging_dir/host/bin/sha256" "$shim_dir/sha256"
-      elif command -v sha256sum >/dev/null 2>&1; then
-        cat <<'EOF' > "$shim_dir/sha256"
+  # --- sha256 shim：必须保证一定会生成 ---
+  if ! command -v sha256 >/dev/null 2>&1; then
+    cat > "$shim_dir/sha256" <<'EOF'
 #!/usr/bin/env sh
-exec sha256sum "$@"
+if command -v sha256sum >/dev/null 2>&1; then
+  exec sha256sum "$@"
+elif command -v openssl >/dev/null 2>&1; then
+  exec openssl dgst -sha256 "$@"
+else
+  echo "sha256: no backend (sha256sum/openssl)" >&2
+  exit 127
+fi
 EOF
-        chmod +x "$shim_dir/sha256"
-      elif command -v openssl >/dev/null 2>&1; then
-        cat <<'EOF' > "$shim_dir/sha256"
-#!/usr/bin/env sh
-exec openssl dgst -sha256 "$@"
-EOF
-        chmod +x "$shim_dir/sha256"
-      fi
-    fi
-
-    (
-      cd "$dir"
-      PATH="$shim_dir:/builder/staging_dir/host/bin:$PATH" "$idx_script" . > Packages
-      gzip -9c Packages > Packages.gz
-      if [ -f "$json_script" ]; then
-        PATH="$shim_dir:/builder/staging_dir/host/bin:$PATH" python3 "$json_script" . > Packages.json || true
-      fi
-    )
-    rm -rf "$shim_dir"
-    echo "✅ Generated ipk index (Packages, Packages.gz) in $dir"
-  else
-    echo "⚠️ ipkg-make-index.sh not found, skip ipk index in $dir" >&2
-    return 0
+    chmod +x "$shim_dir/sha256"
   fi
 
+  # --- 可选：调试 host sed 到底拿到什么参数 ---
+  if [ "${DEBUG_SED:-0}" = "1" ]; then
+    cat > "$shim_dir/sed" <<'EOF'
+#!/usr/bin/env sh
+echo "SED ARGS: $*" >&2
+exec /usr/bin/sed "$@"
+EOF
+    chmod +x "$shim_dir/sed"
+  fi
+
+  # ✅ 关键：系统 sed 优先，避免 OpenWrt host sed 的 -e 解析问题
+  #    shim_dir 仍放最前（为了 sha256），但 /usr/bin 先于 host/bin
+  local safe_path
+  safe_path="$shim_dir:/usr/bin:/bin:/usr/sbin:/sbin:/builder/staging_dir/host/bin:$PATH"
+
+  (
+    cd "$dir" || exit 1
+
+    echo "==> Building ipk index in $PWD"
+    PATH="$safe_path" "$idx_script" . > Packages
+    gzip -9c Packages > Packages.gz
+
+    if [ -f "$json_script" ]; then
+      PATH="$safe_path" python3 "$json_script" . > Packages.json || true
+    fi
+  )
+
+  rm -rf "$shim_dir"
+
+  # --- 签名：签 Packages，不是签每个 ipk ---
   if [ -s "$priv_key" ] && [ -n "${usign_bin:-}" ] && [ -x "$usign_bin" ]; then
-    "$usign_bin" -S -m "$dir/Packages" -s "$priv_key" -x "$dir/Packages.sig"
+    (
+      cd "$dir" || exit 1
+      "$usign_bin" -S -m Packages -s "$priv_key" -x Packages.sig
+    )
     echo "✅ Signed ipk index -> $dir/Packages.sig"
   else
     echo "ℹ️ Skip ipk Packages.sig (missing key-build or usign)"
   fi
+
+  echo "✅ Generated ipk index in $dir: Packages, Packages.gz[, Packages.sig]"
 }
+
 
 index_and_sign_apk() {
   local dir="$1"
@@ -151,7 +170,7 @@ index_and_sign_apk() {
 
   (
     cd "$dir"
-    "$apk_bin" index --no-warnings -o packages.adb ./*.apk
+    "$apk_bin" index --no-warnings --allow-untrusted -o packages.adb ./*.apk
   )
   echo "✅ Generated apk index -> $dir/packages.adb"
 
